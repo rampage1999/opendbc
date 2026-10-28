@@ -3,7 +3,7 @@ from enum import Enum, IntFlag
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms
 from opendbc.car.lateral import AngleSteeringLimitsVM
 from opendbc.car.structs import CarParams, CarState
-from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column
+from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column, SupportType
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries
 
 Ecu = CarParams.Ecu
@@ -37,8 +37,14 @@ class TeslaCarDocsHW4(CarDocs):
 
 
 @dataclass
+class TeslaCarHW4ModelSXDocs(TeslaCarDocsHW4):
+  support_type: SupportType = SupportType.COMMUNITY
+  support_link: str = "community"
+
+
+@dataclass
 class TeslaPlatformConfig(PlatformConfig):
-  dbc_dict: DbcDict = field(default_factory=lambda: {Bus.party: 'tesla_model3_party'})
+  dbc_dict: DbcDict = field(default_factory=lambda: {Bus.party: 'tesla_model3_party', Bus.adas: 'tesla_model3_vehicle'})
 
 
 class CAR(Platforms):

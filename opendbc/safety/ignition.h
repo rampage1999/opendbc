@@ -1,3 +1,15 @@
+#pragma once
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "opendbc/safety/can.h"
+#include "opendbc/safety/helpers.h"
+
+bool ignition_can = false;
+uint32_t ignition_can_cnt = 0U;
+
+void ignition_can_hook(const CANPacket_t *msg) {
   // GM exception
   if (msg_matches(msg, 0x1F1U, 0U, 8U)) {
     // SystemPowerMode (2=Run, 3=Crank Request)
@@ -51,7 +63,7 @@
       ignition_can_cnt = 0U;
     }
     prev_counter_vw_meb = counter;
-  
+  }
 
   // Tesla Model S/X HW1 (AP1) exception - GTW_status on bus 0 or bus 1
   if (msg_matches(msg, 0x348U, 0U, 8U) || msg_matches(msg, 0x348U, 1U, 8U)) {
