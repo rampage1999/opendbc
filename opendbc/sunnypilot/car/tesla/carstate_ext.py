@@ -23,7 +23,7 @@ class CarStateExt:
     self.active_touch_points = 0
 
   def update(self, ret: structs.CarState, ret_sp: structs.CarStateSP, can_parsers: dict[StrEnum, CANParser]) -> None:
-    if self.CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS:
+    if self.CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS and Bus.adas in can_parsers:
       cp_adas = can_parsers[Bus.adas]
 
       prev_active_touch_points = self.active_touch_points
@@ -44,8 +44,11 @@ class CarStateExt:
 
     cp_ap_party = can_parsers[Bus.ap_party]
 
-    speed_units = self.can_define.dv["DI_state"]["DI_speedUnits"].get(int(cp_party.vl["DI_state"]["DI_speedUnits"]), None)
+    # Model 3/Y party DBC. Legacy S/X party DBCs (tesla_can / tesla_raven_party)
+    # do not all carry DI_state and DAS_status; cruise speed for those cars is
+    # parsed on the legacy path.
     try:
+      speed_units = self.can_define.dv["DI_state"]["DI_speedUnits"].get(int(cp_party.vl["DI_state"]["DI_speedUnits"]), None)
       speed_limit = cp_ap_party.vl["DAS_status"]["DAS_fusedSpeedLimit"]
       if self.can_define.dv["DAS_status"]["DAS_fusedSpeedLimit"].get(int(speed_limit), None) in ["NONE", "UNKNOWN_SNA"]:
         ret_sp.speedLimit = 0
@@ -61,7 +64,7 @@ class CarStateExt:
   def get_parser(CP: structs.CarParams, CP_SP: structs.CarParamsSP) -> dict[StrEnum, CANParser]:
     messages = {}
 
-    if CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS:
+    if CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS and Bus.adas in DBC[CP.carFingerprint]:
       messages[Bus.adas] = CANParser(DBC[CP.carFingerprint][Bus.adas], [], CANBUS.vehicle)
 
     return messages
