@@ -473,6 +473,46 @@ class TestTeslaIgnition(common.SafetyTestBase):
     self.safety.ignition_can_hook(self._msg(2, 2))
     self.safety.ignition_can_hook(self._msg(3, 2))
     self.assertFalse(self.safety.get_ignition_can())
+
+
+class TestTeslaLegacyIgnition(common.SafetyTestBase):
+  """HW1/AP1 ignition: GTW_status (0x348) on bus 0 or 1, plus body 0x201."""
+
+  DBC = None
+  SAFETY_MODEL = None
+  TX_MSGS: list = []
+
+  def _gtw(self, counter, driving, bus=0):
+    dat = bytearray(8)
+    dat[0] = 0x1 if driving else 0x0
+    dat[6] = counter & 0xF
+    return common.make_msg(bus, 0x348, dat=bytes(dat))
+
+  def test_ignition_on(self):
+    for bus in (0, 1):
+      for i in range(16):
+        self.safety.init_tests()
+        self.safety.ignition_can_hook(self._gtw(i, True, bus))
+        self.assertFalse(self.safety.get_ignition_can())
+        self.safety.ignition_can_hook(self._gtw((i + 1) % 16, True, bus))
+        self.assertTrue(self.safety.get_ignition_can())
+
+  def test_ignition_off(self):
+    self.safety.ignition_can_hook(self._gtw(0, True))
+    self.safety.ignition_can_hook(self._gtw(1, True))
+    self.assertTrue(self.safety.get_ignition_can())
+    self.safety.ignition_can_hook(self._gtw(2, False))
+    self.safety.ignition_can_hook(self._gtw(3, False))
+    self.assertFalse(self.safety.get_ignition_can())
+
+  def test_body_message_sets_ignition(self):
+    for bus in (0, 2):
+      self.safety.init_tests()
+      self.assertFalse(self.safety.get_ignition_can())
+      self.safety.ignition_can_hook(common.make_msg(bus, 0x201))
+      self.assertTrue(self.safety.get_ignition_can())
+
+
 class TestTeslaVehicleBusSafety(TestTeslaSafetyBase):
 
   LONGITUDINAL = False

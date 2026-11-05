@@ -3,7 +3,7 @@ from enum import Enum, IntFlag
 from opendbc.car import Bus, CarSpecs, DbcDict, PlatformConfig, Platforms
 from opendbc.car.lateral import AngleSteeringLimitsVM
 from opendbc.car.structs import CarParams, CarState
-from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column
+from opendbc.car.docs_definitions import CarDocs, CarFootnote, CarHarness, CarParts, Column, SupportType
 from opendbc.car.fw_query_definitions import FwQueryConfig, Request, StdQueries
 
 Ecu = CarParams.Ecu
@@ -37,8 +37,14 @@ class TeslaCarDocsHW4(CarDocs):
 
 
 @dataclass
+class TeslaCarHW4ModelSXDocs(TeslaCarDocsHW4):
+  support_type: SupportType = SupportType.COMMUNITY
+  support_link: str = "community"
+
+
+@dataclass
 class TeslaPlatformConfig(PlatformConfig):
-  dbc_dict: DbcDict = field(default_factory=lambda: {Bus.party: 'tesla_model3_party'})
+  dbc_dict: DbcDict = field(default_factory=lambda: {Bus.party: 'tesla_model3_party', Bus.adas: 'tesla_model3_vehicle'})
 
 
 class CAR(Platforms):
@@ -60,7 +66,7 @@ class CAR(Platforms):
     {Bus.party: 'tesla_model3_party', Bus.radar: 'tesla_radar_continental_generated', Bus.adas: 'tesla_model3_vehicle'},
   )
   TESLA_MODEL_X = TeslaPlatformConfig(
-    [TeslaCarDocsHW4("Tesla Model X (with HW4) 2024")],
+    [TeslaCarHW4ModelSXDocs("Tesla Model X (with HW4) 2024")],
     CarSpecs(wheelbase=2.960, steerRatio=12.0),
   )
   TESLA_MODEL_X_HW1 = TeslaPlatformConfig(
@@ -148,6 +154,7 @@ FSD_14_FW = {
     b'TeMYG4_Main_0.0.0 (77),E4HP015.04.5',
     b'TeMYG4_Main_0.0.0 (78),E4HP015.05.0',
     b'TeMYG4_Main_0.0.0 (77),E4H015.04.5',
+    b'TeMYG4_Main_0.0.0 (78),E4H015.05.0',
   ],
   CAR.TESLA_MODEL_Y: [
     b'TeMYG4_Legacy3Y_0.0.0 (6),Y4003.04.0',
