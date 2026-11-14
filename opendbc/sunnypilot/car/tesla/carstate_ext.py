@@ -44,12 +44,16 @@ class CarStateExt:
 
     cp_ap_party = can_parsers[Bus.ap_party]
 
+    # Legacy HW1/HW2 platforms carry DI_state on the chassis bus and the AP
+    # status in AutopilotStatus (0x399) on tesla_can; Model 3/Y use the party
+    # bus and DAS_status. Pick both by what the parsers actually carry.
+    cp_di = can_parsers.get(Bus.chassis, cp_party)
+    ap_msg = "AutopilotStatus" if "AutopilotStatus" in cp_ap_party.vl else "DAS_status"
+
     try:
-      # legacy platforms (Model S/X HW1-HW3) may not carry DI_state/DAS_status on the
-      # party bus; skip speed-limit extraction instead of crashing carstate
-      speed_units = self.can_define.dv["DI_state"]["DI_speedUnits"].get(int(cp_party.vl["DI_state"]["DI_speedUnits"]), None)
-      speed_limit = cp_ap_party.vl["DAS_status"]["DAS_fusedSpeedLimit"]
-      if self.can_define.dv["DAS_status"]["DAS_fusedSpeedLimit"].get(int(speed_limit), None) in ["NONE", "UNKNOWN_SNA"]:
+      speed_units = self.can_define.dv["DI_state"]["DI_speedUnits"].get(int(cp_di.vl["DI_state"]["DI_speedUnits"]), None)
+      speed_limit = cp_ap_party.vl[ap_msg]["DAS_fusedSpeedLimit"]
+      if self.can_define.dv[ap_msg]["DAS_fusedSpeedLimit"].get(int(speed_limit), None) in ["NONE", "UNKNOWN_SNA"]:
         ret_sp.speedLimit = 0
       else:
         if speed_units == "KPH":

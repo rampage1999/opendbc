@@ -28,8 +28,13 @@ def detected(value) -> bool:
 
 
 def frames_from_vl_all(cp) -> list[dict]:
-  """0x399 frames received this step, oldest first, as {signal: value}."""
-  sigs = cp.vl_all.get("DAS_status", {})
+  """AP status frames received this step, oldest first, as {signal: value}.
+
+  Legacy HW1/HW2 cars carry this in `AutopilotStatus` (0x399) on tesla_can;
+  Model 3/Y carry it in `DAS_status` (0x3 9b) on tesla_model3_party.
+  """
+  name = "AutopilotStatus" if "AutopilotStatus" in cp.vl_all else "DAS_status"
+  sigs = cp.vl_all.get(name, {})
   n = len(sigs.get(BSM_LEFT, []))
   out = []
   for i in range(n):
