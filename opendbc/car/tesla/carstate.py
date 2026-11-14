@@ -1,8 +1,10 @@
 import copy
+import time
 from opendbc.can import CANDefine, CANParser
 from opendbc.car import Bus, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.interfaces import CarStateBase
+from opendbc.car.tesla.blindspot import Ap1Blindspot, frames_from_vl_all
 from opendbc.car.tesla.teslacan import get_steer_ctrl_type
 from opendbc.car.tesla.values import DBC, CANBUS, GEAR_MAP, STEER_THRESHOLD, TeslaFlags, TeslaLegacyParams, CAR, LEGACY_CARS
 
@@ -43,6 +45,11 @@ class CarState(CarStateBase, CarStateExt):
 
     self.hands_on_level = 0
     self.das_control = None
+
+    # AP1 blind-spot hold (BogPilot blindspot.py): 0x399 is ~2.4 Hz, so each
+    # side latches for BSM_HOLD_S after the last warning frame.
+    self.ap1_blindspot = Ap1Blindspot()
+    self.ap1_blindspot_t = None
 
   def update_autopark_state(self, autopark_state: str, cruise_enabled: bool):
     autopark_now = autopark_state in ("ACTIVE", "COMPLETE", "SELFPARK_STARTED")
@@ -225,6 +232,12 @@ class CarState(CarStateBase, CarStateExt):
       ret.seatbeltUnlatched = cp_chassis.vl["RCM_status"]["RCM_buckleDriverStatus"] != 1
     else:
       ret.seatbeltUnlatched = cp_chassis.vl["SDM1"]["SDM_bcklDrivStatus"] != 1
+
+    # Blindspot (AP1 0x399, with the ~1 s hold from BogPilot)
+    now = time.monotonic()
+    dt = 0.0 if self.ap1_blindspot_t is None else min(now - self.ap1_blindspot_t, 1.0)
+    self.ap1_blindspot_t = now
+    ret.leftBlindspot, ret.rightBlindspot = self.ap1_blindspot.update(frames_from_vl_all(cp_ap_party), dt)
 
     # AEB
     ret.stockAeb = cp_ap_pt.vl["DAS_control"]["DAS_aebEvent"] == 1
