@@ -3,6 +3,8 @@ from opendbc.can import CANPacker
 from opendbc.car import Bus
 from opendbc.car.lateral import apply_steer_angle_limits_vm
 from opendbc.car.interfaces import CarControllerBase
+from opendbc.car.tesla.hso import Ap1DriverYield
+from opendbc.car.tesla.long_smooth import Ap1AccelSmoother
 from opendbc.car.tesla.teslacan import TeslaCAN
 from opendbc.car.tesla.teslacan_legacy import TeslaCANRaven
 from opendbc.car.tesla.values import CarControllerParams, CANBUS, LEGACY_CARS, CAR
@@ -25,6 +27,16 @@ class CarController(CarControllerBase, CoopSteeringCarController):
     self.packer = CANPacker(dbc_names[Bus.party])
     self.tesla_can = TeslaCAN(CP, self.packer)
 
+    # AP1 hands-on pause: firm EPAS torque (>=2) withholds lateral without
+    # dropping cruise; lateral resumes 0.3 s after the driver is back at 0.
+    self.hso = Ap1DriverYield() if CP.carFingerprint in (CAR.TESLA_MODEL_S_HW1, CAR.TESLA_MODEL_X_HW1,) else None
+    self.hso_t = None
+
+    # AP1 accel shaping: LongControl PID gains are zero on this platform, so the
+    # planner request is slewed before it goes out in DAS_control 0x2b9.
+    self.accel_smoother = Ap1AccelSmoother() if CP.carFingerprint in (CAR.TESLA_MODEL_S_HW1, CAR.TESLA_MODEL_X_HW1,) else None
+    self.long_t = None
+
     # Vehicle model used for lateral limiting
     self.VM = VehicleModel(get_safety_CP())
 
@@ -46,7 +58,13 @@ class CarController(CarControllerBase, CoopSteeringCarController):
     # Tesla EPS enforces disabling steering on heavy lateral override force.
     # When enabling in a tight curve, we wait until user reduces steering force to start steering.
     # Canceling is done on rising edge and is handled generically with CC.cruiseControl.cancel
-    lat_active = CC.latActive and CS.hands_on_level < 3
+    if self.hso is not None:
+      dt = 0.01 if self.hso_t is None else min((now_nanos - self.hso_t) / 1e9, 1.0)
+      self.hso_t = now_nanos
+      self.hso.update(CC.enabled, CS.hands_on_level, dt)
+      lat_active = CC.latActive and not self.hso.active
+    else:
+      lat_active = CC.latActive and CS.hands_on_level < 3
 
     if self.frame % 2 == 0:
       # Angular rate limit based on speed
@@ -67,6 +85,18 @@ class CarController(CarControllerBase, CoopSteeringCarController):
       if self.frame % 4 == 0:
         state = 13 if CC.cruiseControl.cancel else 4  # 4=ACC_ON, 13=ACC_CANCEL_GENERIC_SILENT
         accel = float(np.clip(actuators.accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
+        if self.accel_smoother is not None:
+          dt = 0.01 if self.long_t is None else min((now_nanos - self.long_t) / 1e9, 1.0)
+          self.long_t = now_nanos
+          accel = self.accel_smoother.update(
+            accel, CS.out.vEgo, CC.longActive,
+            fcw=int(CC.hudControl.visualAlert) == 1,
+            stopping=int(actuators.longControlState) == 2,
+            standstill=CS.out.standstill,
+            gas_pressed=CS.out.gasPressed,
+            dt=dt,
+          )
+          accel = float(np.clip(accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
         cntr = (self.frame // 4) % 8
         if self.CP.carFingerprint in LEGACY_CARS:
           can_sends.append(self.tesla_can.create_longitudinal_command(state, accel, cntr, CS.out.vEgo, CC.longActive, CS.out.gasPressed))
